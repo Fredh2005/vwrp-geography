@@ -1,0 +1,96 @@
+name: Rebuild nightly from live data
+
+# The screener republishes data.json every night at 21:35 UK with live market
+# caps and fundamentals for every holding it prices. This picks that up and
+# recomputes the live weight, valuation, growth and return layers.
+#
+# Vanguard's published weights come from the .xlsx in holdings/ and only change
+# when a new export is committed — those are the authoritative figures and are
+# deliberately not derived from live prices.
+on:
+  schedule:
+    - cron: "20 22 * * *"    # 23:20 UK in summer, 22:20 in winter
+    - cron: "20 23 * * *"    # the other side of the clock change
+  push:
+    paths:
+      - "holdings/**"
+      - "build.py"
+      - "template.html"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebuild
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - id: check
+        # Two crons cover the UK clock change; only the 23:20 local one runs.
+        run: |
+          UK_HOUR=$(TZ=Europe/London date +%H)
+          echo "UK local time: $(TZ=Europe/London date '+%Y-%m-%d %H:%M %Z')"
+          if [ "${{ github.event_name }}" != "schedule" ] || [ "$UK_HOUR" = "23" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Off-season firing (UK hour $UK_HOUR) - skipping."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  rebuild:
+    needs: guard
+    if: needs.guard.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install --quiet pandas openpyxl
+
+      - name: Fetch world topology
+        run: |
+          curl -fsSLo /tmp/world50m.json \
+            https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json
+          test -s /tmp/world50m.json
+
+      - name: Rebuild
+        env:
+          FEED_URL: https://fredh2005.github.io/vwrp-screener1/data.json
+        run: python build.py
+
+      - name: Fail if the rebuild looks wrong
+        run: |
+          python - <<'PY'
+          import json, sys
+          d = json.load(open("mapdata.json"))
+          n, w = len(d["countries"]), d["mappedWeight"]
+          live = d.get("live", {})
+          print(f"countries {n} | weight {w}% | live countries {live.get('countries', 0)}")
+          # Republishing a thin page over a good one is worse than a red X.
+          if n < 30:
+              sys.exit(f"::error::Only {n} countries mapped.")
+          if w < 90:
+              sys.exit(f"::error::Only {w}% of fund weight mapped.")
+          PY
+
+      - name: Commit if anything changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html mapdata.json
+          if git diff --staged --quiet; then
+            echo "Nothing changed since last night."
+          else
+            git commit -m "chore: nightly rebuild from live screener data"
+            git push
+          fi

@@ -6,9 +6,78 @@ published page carries plain SVG paths and needs no mapping library at all.
 """
 import json, math, os, sys
 
-TOPO = "/tmp/world50m.json"
-SRC = "/Users/freddiehewer/Desktop/Holdings details - Vanguard FTSE All-World UCITS ETF (USD) Accumulating - 18_08_2026.xlsx"
-OUT = os.path.expanduser("~/Documents/GitHub/vwrp-geography/mapdata.json")
+HERE = os.path.dirname(os.path.abspath(__file__))
+TOPO = os.environ.get("TOPO", "/tmp/world50m.json")
+OUT = os.path.join(HERE, "mapdata.json")
+
+# Nightly screener output: every holding with live market cap and fundamentals.
+FEED = os.environ.get(
+    "FEED_URL", "https://fredh2005.github.io/vwrp-screener1/data.json")
+
+def newest_holdings():
+    """The most recent Vanguard export committed to holdings/."""
+    folder = os.path.join(HERE, "holdings")
+    files = [os.path.join(folder, f) for f in os.listdir(folder)
+             if f.lower().endswith((".xlsx", ".xls")) and not f.startswith("~$")] \
+        if os.path.isdir(folder) else []
+    if files:
+        return max(files, key=os.path.getmtime)
+    raise SystemExit("No holdings file. Commit a Vanguard .xlsx export to holdings/")
+
+
+SRC = os.environ.get("HOLDINGS_XLSX") or newest_holdings()
+
+
+def median(vals):
+    v = sorted(x for x in vals if x is not None)
+    if not v:
+        return None
+    m = len(v) // 2
+    return v[m] if len(v) % 2 else (v[m - 1] + v[m]) / 2
+
+
+def load_feed():
+    """Country-level live figures from the screener's nightly run.
+
+    Returns {} when the feed is unreachable, so the page still builds from
+    Vanguard's published weights alone rather than failing."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(FEED, timeout=45) as r:
+            feed = json.load(r)
+    except Exception as exc:
+        print(f"! live feed unavailable ({exc}); building weights only")
+        return {}
+
+    holdings = feed.get("holdings", [])
+    by_region = {}
+    for h in holdings:
+        by_region.setdefault(h.get("region"), []).append(h)
+
+    total_mc = sum(h["marketCapUsd"] for h in holdings if h.get("marketCapUsd")) or 1
+    MIN_N = 3          # a median over one or two companies is noise, not a signal
+    out = {}
+    for region, hs in by_region.items():
+        mc = sum(h["marketCapUsd"] for h in hs if h.get("marketCapUsd"))
+        pes = [h["peTrailing"] for h in hs
+               if h.get("peTrailing") and h["peTrailing"] > 0]
+        rec = {
+            "liveWeight": round(mc / total_mc * 100, 4),
+            "sampled": len(hs),
+            "enough": len(hs) >= MIN_N,
+        }
+        if len(hs) >= MIN_N:
+            rec.update({
+                "medianPE": round(median(pes), 2) if pes else None,
+                "medianGrowth": round(median([h.get("revGrowth") for h in hs]), 2),
+                "medianReturn1y": round(median([h.get("return1y") for h in hs]), 2),
+                "medianOpportunity": round(median([h.get("opportunity") for h in hs]), 1),
+            })
+        out[region] = rec
+    print(f"live feed: {len(holdings)} holdings, {len(out)} countries, "
+          f"{sum(1 for v in out.values() if v['enough'])} with enough for medians")
+    return {"generated": feed.get("generated"), "byRegion": out,
+            "sampledHoldings": len(holdings)}
 
 A2N = {
  "US":"840","JP":"392","GB":"826","TW":"158","CA":"124","HK":"344","KR":"410",
@@ -261,7 +330,17 @@ def main():
     vb_y = max(0, min_y - pad)
     vb_h = min(H, max_y + pad) - vb_y
 
+    live = load_feed()
+    live_by_region = (live or {}).get("byRegion", {})
+    for cid, c in countries.items():
+        lv = live_by_region.get(c["code"])
+        if lv:
+            c["live"] = lv
+
     payload = {
+        "live": {"generated": (live or {}).get("generated"),
+                 "sampledHoldings": (live or {}).get("sampledHoldings", 0),
+                 "countries": sum(1 for c in countries.values() if c.get("live"))},
         "writtenOff": written_off,
         "concentration": {
             "top1": round(ws[0], 2),

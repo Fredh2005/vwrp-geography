@@ -5,6 +5,20 @@ and 70% is three.
 
 Live at **https://fredh2005.github.io/vwrp-geography/**
 
+## Two layers of data
+
+**Vanguard's published weights** come from the `.xlsx` in `holdings/` and change only
+when a new export is committed. These are the authoritative figures.
+
+**Live figures** — weight today, valuation, revenue growth, 1-year return and
+opportunity — are recomputed **nightly** from the screener's feed at
+`https://fredh2005.github.io/vwrp-screener1/data.json`, which prices every holding
+it covers. Live layers reach 28 of the 48 countries: the screener prices the
+largest holdings, so smaller markets have too few companies for a meaningful
+median, and are shown as "no live data" rather than guessed at.
+
+If the feed is unreachable the page still builds from the published weights alone.
+
 ## What it shows
 
 - A **world choropleth** shaded by each country's real share of the fund, with a

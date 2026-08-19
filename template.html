@@ -12,6 +12,9 @@
   --accent:#8A6A2F; --on-accent:#FFFFFF;
   --sea:#EDF2F5; --nodata:#D3CEC1; --stroke:#FFFFFF;
   --b1:#F3EAD6; --b2:#E4CFA0; --b3:#D0AE68; --b4:#B08C3E; --b5:#8A6A2F; --b6:#5C4519;
+  /* diverging, for figures that can be negative */
+  --d1:#9E3A2C; --d2:#C57A63; --d3:#E8C7B8; --dm:#E8E6DF;
+  --d4:#B9CBD6; --d5:#6E9AB0; --d6:#2E6480;
   --font-display:ui-serif,Georgia,"Iowan Old Style","Times New Roman",serif;
   --font-ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --font-num:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
@@ -24,6 +27,8 @@
      map canvas here, or the heaviest countries would sink into the page. */
   --sea:#1E2E42; --nodata:#42586F; --stroke:#1E2E42;
   --b1:#E9D9B4; --b2:#CBAC6C; --b3:#A9873F; --b4:#7F6429; --b5:#59451A; --b6:#33260C;
+  --d1:#E39182; --d2:#B06A58; --d3:#6E4438; --dm:#3A4657;
+  --d4:#3D5F73; --d5:#5B8FA8; --d6:#8FBDD4;
 }}
 :root[data-theme=dark]{
   --bg:#0D1524; --panel:#132033; --panel2:#1A2A41;
@@ -33,6 +38,8 @@
      map canvas here, or the heaviest countries would sink into the page. */
   --sea:#1E2E42; --nodata:#42586F; --stroke:#1E2E42;
   --b1:#E9D9B4; --b2:#CBAC6C; --b3:#A9873F; --b4:#7F6429; --b5:#59451A; --b6:#33260C;
+  --d1:#E39182; --d2:#B06A58; --d3:#6E4438; --dm:#3A4657;
+  --d4:#3D5F73; --d5:#5B8FA8; --d6:#8FBDD4;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui);
@@ -60,6 +67,13 @@ h2+.note{margin-top:0}
 .card .v{font-family:var(--font-display);font-size:27px;font-weight:600;margin-top:5px;
   letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .card .s{font-size:11.5px;color:var(--muted);margin-top:3px}
+.metrics{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.metrics button{background:var(--panel);color:var(--muted);border:1px solid var(--line-strong);
+  border-radius:2px;padding:6px 11px;font-size:11.5px;cursor:pointer;font-family:inherit}
+.metrics button:hover{color:var(--accent);border-color:var(--accent)}
+.metrics button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);
+  border-color:var(--accent);font-weight:600}
+.metrics button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .mapbox{background:var(--panel);border:1px solid var(--line);border-radius:3px;
   padding:10px;position:relative}
 svg.map{display:block;width:100%;height:auto}
@@ -119,8 +133,8 @@ details.more summary:hover{color:var(--accent)}
   <div class="cards" id="cards"></div>
 
   <h2>Every country it holds</h2>
-  <p class="note">Shaded by share of the fund. Bands are uneven on purpose — on a linear
-    scale the United States would be the only country you could see.</p>
+  <p class="note" id="mapNote"></p>
+  <div class="metrics" id="metrics"></div>
   <div class="mapbox">
     <svg class="map" id="map" role="img"
          aria-label="World map shaded by each country's share of VWRP. The ranked list below carries the same figures."></svg>
@@ -161,16 +175,79 @@ const DATA = __MAPDATA__;
   var C=DATA.countries, K=DATA.concentration;
   var byId={}; Object.keys(C).forEach(function(id){ byId[id]=C[id]; });
 
-  // Uneven bands: weights span 0.001% to 61%, so linear shading shows one country.
-  var BANDS=[[10,"b6"],[3,"b5"],[1,"b4"],[0.5,"b3"],[0.1,"b2"],[0,"b1"]];
-  function band(w){ for(var i=0;i<BANDS.length;i++) if(w>=BANDS[i][0]) return BANDS[i][1];
-    return "b1"; }
   var pct=function(v,d){ return (v==null?"—":v.toFixed(d===undefined?2:d)+"%"); };
+  var num=function(v,d){ return (v==null?"—":v.toFixed(d===undefined?1:d)); };
+
+  // Each view needs its own bands. Weights span 0.001% to 61%, so linear shading
+  // would show one country; growth and return can be negative, so those diverge
+  // around zero instead of running light to dark.
+  var VIEWS={
+    weight:{ label:"Fund weight", kind:"seq", fmt:pct,
+      note:"Vanguard's published weight, as at __ASOF__. Bands are uneven on purpose — "+
+           "on a linear scale the United States would be the only country you could see.",
+      get:function(c){ return c.weight; },
+      bands:[[10,"b6"],[3,"b5"],[1,"b4"],[0.5,"b3"],[0.1,"b2"],[0,"b1"]],
+      legend:[["b1","under 0.1%"],["b2","0.1–0.5%"],["b3","0.5–1%"],["b4","1–3%"],
+              ["b5","3–10%"],["b6","over 10%"]] },
+    liveWeight:{ label:"Weight today", kind:"seq", fmt:pct, live:true,
+      note:"Share of market value across the holdings the screener priced last night. "+
+           "Compare it with the published weight to see which way the fund has drifted "+
+           "since the snapshot.",
+      get:function(c){ return c.live && c.live.liveWeight; },
+      bands:[[10,"b6"],[3,"b5"],[1,"b4"],[0.5,"b3"],[0.1,"b2"],[0,"b1"]],
+      legend:[["b1","under 0.1%"],["b2","0.1–0.5%"],["b3","0.5–1%"],["b4","1–3%"],
+              ["b5","3–10%"],["b6","over 10%"]] },
+    medianPE:{ label:"Valuation", kind:"seq", fmt:num, live:true, needsEnough:true,
+      note:"Median trailing price/earnings of the companies priced in each market. "+
+           "Darker is more expensive. Multiples are only loosely comparable across "+
+           "countries — sector mix drives much of the difference.",
+      get:function(c){ return c.live && c.live.medianPE; },
+      bands:[[32,"b6"],[26,"b5"],[21,"b4"],[17,"b3"],[13,"b2"],[0,"b1"]],
+      legend:[["b1","under 13x"],["b2","13–17x"],["b3","17–21x"],["b4","21–26x"],
+              ["b5","26–32x"],["b6","over 32x"]] },
+    medianGrowth:{ label:"Revenue growth", kind:"div", fmt:pct, live:true, needsEnough:true,
+      note:"Median revenue growth over the last reported year. Blue is growing, red is "+
+           "shrinking.",
+      get:function(c){ return c.live && c.live.medianGrowth; },
+      bands:[[20,"d6"],[10,"d5"],[2,"d4"],[-2,"dm"],[-10,"d3"],[-20,"d2"],[-999,"d1"]],
+      legend:[["d1","under −20%"],["d2","−20 to −10%"],["d3","−10 to −2%"],["dm","flat"],
+              ["d4","2–10%"],["d5","10–20%"],["d6","over 20%"]] },
+    medianReturn1y:{ label:"1-year return", kind:"div", fmt:pct, live:true, needsEnough:true,
+      note:"Median share price change over the past year, dividends excluded. Where the "+
+           "market has been, not where it is going.",
+      get:function(c){ return c.live && c.live.medianReturn1y; },
+      bands:[[40,"d6"],[20,"d5"],[3,"d4"],[-3,"dm"],[-15,"d3"],[-30,"d2"],[-999,"d1"]],
+      legend:[["d1","under −30%"],["d2","−30 to −15%"],["d3","−15 to −3%"],["dm","flat"],
+              ["d4","3–20%"],["d5","20–40%"],["d6","over 40%"]] },
+    medianOpportunity:{ label:"Opportunity", kind:"seq", fmt:num, live:true, needsEnough:true,
+      note:"Median opportunity score from the screener — value, growth, quality and "+
+           "stability blended. Darker scores better. A mechanical ranking, not a view "+
+           "on any market.",
+      get:function(c){ return c.live && c.live.medianOpportunity; },
+      bands:[[62,"b6"],[56,"b5"],[50,"b4"],[45,"b3"],[38,"b2"],[0,"b1"]],
+      legend:[["b1","under 38"],["b2","38–45"],["b3","45–50"],["b4","50–56"],
+              ["b5","56–62"],["b6","over 62"]] }
+  };
+
+  var view="weight";
+  function band(v, spec){
+    if(v==null) return null;
+    for(var i=0;i<spec.bands.length;i++) if(v>=spec.bands[i][0]) return spec.bands[i][1];
+    return spec.bands[spec.bands.length-1][1];
+  }
+  function valueFor(c, spec){
+    if(spec.needsEnough && (!c.live || !c.live.enough)) return null;
+    var v = spec.get(c);
+    return (v===undefined || v===false) ? null : v;
+  }
 
   el("nHold").textContent=DATA.totalHoldings.toLocaleString();
   el("nCty").textContent=K.countries;
+  var lvm=DATA.live||{};
   el("sub").textContent="Vanguard's published holdings, as at "+DATA.asOf+
-    " · "+DATA.mappedWeight+"% of the fund by weight";
+    " · "+DATA.mappedWeight+"% of the fund by weight"+
+    (lvm.generated ? " · live figures for "+lvm.countries+" countries, priced "+
+      lvm.generated : "");
 
   var us=byId["840"]||{weight:0};
   el("cards").innerHTML=[
@@ -193,10 +270,10 @@ const DATA = __MAPDATA__;
     var p=document.createElementNS(NS,"path");
     p.setAttribute("d",DATA.paths[id]);
     var c=byId[id];
-    p.setAttribute("fill", c ? "var(--"+band(c.weight)+")" : "var(--nodata)");
-    if(c){ p.setAttribute("class","hit"); p.dataset.id=id;
-           p.setAttribute("tabindex","0");
-           p.setAttribute("aria-label",c.name+", "+pct(c.weight)+" of the fund"); }
+    // Countries the fund does not hold are never repainted, so they need a fill
+    // now — without one SVG falls back to black.
+    p.setAttribute("fill","var(--nodata)");
+    if(c){ p.setAttribute("class","hit"); p.dataset.id=id; p.setAttribute("tabindex","0"); }
     svg.appendChild(p);
   });
 
@@ -212,24 +289,67 @@ const DATA = __MAPDATA__;
     g.setAttribute("cx",(b.x+b.width/2).toFixed(1));
     g.setAttribute("cy",(b.y+b.height/2).toFixed(1));
     g.setAttribute("r","4.2");
-    g.setAttribute("fill","var(--"+band(byId[id].weight)+")");
     g.setAttribute("stroke","var(--ink)");
     g.setAttribute("stroke-width","1");
     g.setAttribute("class","hit");
     g.setAttribute("tabindex","0");
     g.dataset.id=id;
-    g.setAttribute("aria-label",byId[id].name+", "+pct(byId[id].weight)+" of the fund");
     markers.push(g);
   });
   markers.forEach(function(m){ svg.appendChild(m); });
 
+  function paint(){
+    var spec=VIEWS[view];
+    svg.querySelectorAll("[data-id]").forEach(function(node){
+      var c=byId[node.dataset.id];
+      var v=valueFor(c,spec), b=band(v,spec);
+      node.setAttribute("fill", b ? "var(--"+b+")" : "var(--nodata)");
+      node.setAttribute("aria-label", c.name+", "+spec.label.toLowerCase()+" "+
+        (v==null ? "not available" : spec.fmt(v)));
+    });
+    el("mapNote").textContent=spec.note.replace("__ASOF__", DATA.asOf);
+    el("legend").innerHTML='<span>'+spec.label+'</span>'+
+      spec.legend.map(function(b){
+        return '<span><span class="sw" style="background:var(--'+b[0]+')"></span> '+b[1]+'</span>';
+      }).join("")+
+      '<span><span class="sw" style="background:var(--nodata)"></span> '+
+      (spec.live ? "no live data" : "not held")+'</span>';
+    el("metrics").querySelectorAll("button").forEach(function(b){
+      b.setAttribute("aria-pressed", String(b.dataset.view===view));
+    });
+  }
+
+  el("metrics").innerHTML=Object.keys(VIEWS).map(function(k){
+    return '<button type="button" data-view="'+k+'" aria-pressed="false">'+
+      VIEWS[k].label+'</button>';
+  }).join("");
+  el("metrics").addEventListener("click",function(ev){
+    var b=ev.target.closest("button"); if(!b) return;
+    view=b.dataset.view; paint();
+  });
+
   var tip=el("tip");
   function showTip(id,x,y){
     var c=byId[id]; if(!c) return;
-    tip.innerHTML='<div class="t">'+c.name+'</div>'+
-      '<div class="r"><span>Share of fund</span><b>'+pct(c.weight)+'</b></div>'+
-      '<div class="r"><span>Holdings</span><b>'+c.holdings+'</b></div>'+
-      (c.topSector?'<div class="r"><span>Mostly</span><b>'+c.topSector+'</b></div>':'')+
+    var lv=c.live||{};
+    var rows='<div class="r"><span>Published weight</span><b>'+pct(c.weight)+'</b></div>';
+    if(lv.liveWeight!=null)
+      rows+='<div class="r"><span>Weight today</span><b>'+pct(lv.liveWeight)+'</b></div>';
+    rows+='<div class="r"><span>Holdings</span><b>'+c.holdings+'</b></div>';
+    if(c.topSector) rows+='<div class="r"><span>Mostly</span><b>'+c.topSector+'</b></div>';
+    if(lv.enough){
+      rows+='<div class="co">'+
+        '<div class="r"><span>Median P/E</span><b>'+num(lv.medianPE)+'</b></div>'+
+        '<div class="r"><span>Revenue growth</span><b>'+pct(lv.medianGrowth,1)+'</b></div>'+
+        '<div class="r"><span>1-year return</span><b>'+pct(lv.medianReturn1y,1)+'</b></div>'+
+        '<div class="r"><span>Opportunity</span><b>'+num(lv.medianOpportunity)+'</b></div>'+
+        '</div>';
+    } else if(lv.sampled){
+      rows+='<div class="co">Only '+lv.sampled+' priced here — too few for a median.</div>';
+    } else {
+      rows+='<div class="co">Not among the holdings priced nightly.</div>';
+    }
+    tip.innerHTML='<div class="t">'+c.name+'</div>'+rows+
       (c.top&&c.top.length?'<div class="co">'+c.top.map(function(t){
           return t[0]+' · '+t[1].toFixed(2)+'%'; }).join('<br>')+'</div>':'');
     tip.classList.add("on");
@@ -252,11 +372,7 @@ const DATA = __MAPDATA__;
   });
   svg.addEventListener("focusout",hideTip);
 
-  el("legend").innerHTML='<span>Share of fund</span>'+
-    [["b1","under 0.1%"],["b2","0.1–0.5%"],["b3","0.5–1%"],["b4","1–3%"],
-     ["b5","3–10%"],["b6","over 10%"]].map(function(b){
-      return '<span><span class="sw" style="background:var(--'+b[0]+')"></span> '+b[1]+'</span>';
-    }).join("")+'<span><span class="sw" style="background:var(--nodata)"></span> not held</span>';
+  paint();
 
   // ---- ranked bars ----
   var list=Object.keys(C).map(function(id){ return C[id]; })
