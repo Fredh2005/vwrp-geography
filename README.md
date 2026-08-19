@@ -19,6 +19,18 @@ median, and are shown as "no live data" rather than guessed at.
 
 If the feed is unreachable the page still builds from the published weights alone.
 
+**Coverage is uneven, and the page says so.** The screener prices the largest
+holdings, so the US has 92% of its weight priced while India has 22% and Norway
+20%. Every tooltip shows how many of a country's holdings were priced and what
+share of its weight that represents, and countries under 50% carry an explicit
+warning that their medians come from a thin slice.
+
+This is also why the drift figure is baselined against Vanguard's weights over
+the *same* priced holdings rather than the whole fund. Compared against whole-fund
+weights the US read 68.75% against a published 61.21% — an apparent 7.5-point
+rise that was purely an artefact of the sample being skewed to large companies.
+Like for like, it is down 2.56 points.
+
 ## What it shows
 
 - A **world choropleth** shaded by each country's real share of the fund, with a

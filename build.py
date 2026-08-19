@@ -75,6 +75,7 @@ def load_feed():
             "baseWeight": round(base_w, 4),
             "drift": round(live_w - base_w, 4),
             "sampled": len(hs),
+            "sampledWeight": round(vw, 4),
             "enough": len(hs) >= MIN_N,
         }
         if len(hs) >= MIN_N:
@@ -345,8 +346,15 @@ def main():
     live_by_region = (live or {}).get("byRegion", {})
     for cid, c in countries.items():
         lv = live_by_region.get(c["code"])
-        if lv:
-            c["live"] = lv
+        if not lv:
+            continue
+        lv = dict(lv)
+        # How much of this country the live figures actually see. The sample is
+        # the largest holdings, so markets made of many mid-sized firms are
+        # covered far less well than the US, and their medians are thinner.
+        lv["coverage"] = round(lv["sampledWeight"] / c["weight"] * 100, 1) if c["weight"] else None
+        lv["thin"] = lv["coverage"] is not None and lv["coverage"] < 50
+        c["live"] = lv
 
     payload = {
         "live": {"generated": (live or {}).get("generated"),
