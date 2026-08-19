@@ -10,7 +10,7 @@
   --bg:#FAF9F6; --panel:#FFFFFF; --panel2:#F4F2EC;
   --ink:#181B22; --muted:#6B6F7B; --line:#E4E0D7; --line-strong:#CFC9BB;
   --accent:#8A6A2F; --on-accent:#FFFFFF;
-  --sea:#EFEDE6; --nodata:#E4E0D7; --stroke:#FFFFFF;
+  --sea:#EDF2F5; --nodata:#D3CEC1; --stroke:#FFFFFF;
   --b1:#F3EAD6; --b2:#E4CFA0; --b3:#D0AE68; --b4:#B08C3E; --b5:#8A6A2F; --b6:#5C4519;
   --font-display:ui-serif,Georgia,"Iowan Old Style","Times New Roman",serif;
   --font-ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -20,15 +20,19 @@
   --bg:#0D1524; --panel:#132033; --panel2:#1A2A41;
   --ink:#E4EBF5; --muted:#8B9BB4; --line:#22334C; --line-strong:#31465F;
   --accent:#D2A85E; --on-accent:#0D1524;
-  --sea:#0F1A2C; --nodata:#1E3049; --stroke:#0D1524;
-  --b1:#2A2416; --b2:#4A3C1E; --b3:#6E5729; --b4:#96773A; --b5:#C09C50; --b6:#E3C67E;
+  /* Darker always means a bigger holding, in both themes. That needs a lighter
+     map canvas here, or the heaviest countries would sink into the page. */
+  --sea:#1E2E42; --nodata:#42586F; --stroke:#1E2E42;
+  --b1:#E9D9B4; --b2:#CBAC6C; --b3:#A9873F; --b4:#7F6429; --b5:#59451A; --b6:#33260C;
 }}
 :root[data-theme=dark]{
   --bg:#0D1524; --panel:#132033; --panel2:#1A2A41;
   --ink:#E4EBF5; --muted:#8B9BB4; --line:#22334C; --line-strong:#31465F;
   --accent:#D2A85E; --on-accent:#0D1524;
-  --sea:#0F1A2C; --nodata:#1E3049; --stroke:#0D1524;
-  --b1:#2A2416; --b2:#4A3C1E; --b3:#6E5729; --b4:#96773A; --b5:#C09C50; --b6:#E3C67E;
+  /* Darker always means a bigger holding, in both themes. That needs a lighter
+     map canvas here, or the heaviest countries would sink into the page. */
+  --sea:#1E2E42; --nodata:#42586F; --stroke:#1E2E42;
+  --b1:#E9D9B4; --b2:#CBAC6C; --b3:#A9873F; --b4:#7F6429; --b5:#59451A; --b6:#33260C;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui);
@@ -118,9 +122,8 @@ details.more summary:hover{color:var(--accent)}
   <p class="note">Shaded by share of the fund. Bands are uneven on purpose — on a linear
     scale the United States would be the only country you could see.</p>
   <div class="mapbox">
-    <svg class="map" id="map" role="img" aria-labelledby="mapTitle">
-      <title id="mapTitle">World map shaded by each country's share of VWRP</title>
-    </svg>
+    <svg class="map" id="map" role="img"
+         aria-label="World map shaded by each country's share of VWRP. The ranked list below carries the same figures."></svg>
     <div class="tip" id="tip" role="status" aria-live="polite"></div>
     <div class="legend" id="legend"></div>
   </div>
@@ -284,6 +287,14 @@ const DATA = __MAPDATA__;
   ].map(function(c){ return '<div class="card"><div class="k">'+c[0]+'</div><div class="v">'+
       c[1]+'</div><div class="s">'+c[2]+'</div></div>'; }).join("");
 
+  var wo=DATA.writtenOff||[];
+  var woNote = wo.length ? "<br><br><b>"+wo.map(function(w){return w.name;}).join(", ")+
+    " is listed but not shaded.</b> Vanguard still reports "+wo[0].holdings+
+    " Russian holdings — Sberbank, Rosneft, Severstal among them — because sanctions "+
+    "make them unsellable, not because they are worth anything: the whole position is "+
+    "US$"+wo[0].value.toFixed(2)+" across a fund of billions. Showing it as an exposure "+
+    "would be worse than leaving it off, so it is drawn as unheld and excluded from the "+
+    "country count." : "";
   el("foot").innerHTML=
     "<b>Country means where a company is listed, not where it earns.</b> Shell is British-listed "+
     "but sells oil worldwide; TSMC is Taiwanese-listed and sells to everyone. So the "+pct(K.top1,0)+
@@ -294,7 +305,7 @@ const DATA = __MAPDATA__;
       " carry "+pct(hk.weight)+". Company count says very little about where your money is. ":"")+
     "<br><br>Weights are Vanguard's own published figures as at "+DATA.asOf+", covering "+
     DATA.mappedWeight+"% of the fund; the small remainder is holdings with no matching country "+
-    "shape. Not investment advice.";
+    "shape." + woNote + "<br><br>Not investment advice.";
 })();
 </script>
 </body>

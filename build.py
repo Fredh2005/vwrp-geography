@@ -97,6 +97,44 @@ def _rdp(pts, tol):
     return [p for p, k in zip(pts, keep) if k]
 
 
+def split_antimeridian(pts):
+    """Cut a lon/lat ring where it crosses 180 degrees.
+
+    Russia reaches past the meridian into Chukotka, so its ring jumps from +179
+    to -179. Projected naively that becomes a straight line drawn back across the
+    whole map. Split at the crossing and clamp each side to the map edge instead.
+    """
+    if not any(abs(pts[i][0] - pts[i-1][0]) > 180 for i in range(1, len(pts))):
+        return [pts]
+
+    segs, cur = [], [pts[0]]
+    for i in range(1, len(pts)):
+        lon0, lat0 = pts[i-1]
+        lon1, lat1 = pts[i]
+        if abs(lon1 - lon0) > 180:
+            # Interpolate the latitude where the path meets the meridian.
+            edge0 = 180.0 if lon0 > 0 else -180.0
+            span = (180.0 - abs(lon0)) + (180.0 - abs(lon1))
+            f = (180.0 - abs(lon0)) / span if span else 0.5
+            lat_edge = lat0 + (lat1 - lat0) * f
+            cur.append((edge0, lat_edge))
+            segs.append(cur)
+            cur = [(-edge0, lat_edge), (lon1, lat1)]
+        else:
+            cur.append((lon1, lat1))
+    segs.append(cur)
+
+    # Close each piece along the meridian it was cut at.
+    out = []
+    for seg in segs:
+        if len(seg) < 3:
+            continue
+        if seg[0] != seg[-1]:
+            seg = seg + [seg[0]]
+        out.append(seg)
+    return out
+
+
 def simplify(pts, tol):
     """Simplify a CLOSED ring.
 
@@ -133,18 +171,19 @@ def to_path(geom, arcs, min_area=0.6, tol=0.45):
     d = []
     for poly in polys:
         for ring in poly:
-            pts = [project(lon, lat) for lon, lat in ring_points(arcs, ring)]
-            if len(pts) < 4:
-                continue
-            pts = simplify(pts, tol)
-            if len(pts) < 4:
-                continue
-            # Drop slivers that only add bytes at this size.
-            area = abs(sum(pts[i][0]*pts[i-1][1] - pts[i-1][0]*pts[i][1]
-                           for i in range(len(pts)))) / 2
-            if area < min_area:
-                continue
-            d.append("M" + "L".join(f"{round(x)},{round(y)}" for x, y in pts) + "Z")
+            for seg in split_antimeridian(ring_points(arcs, ring)):
+                pts = [project(lon, lat) for lon, lat in seg]
+                if len(pts) < 4:
+                    continue
+                pts = simplify(pts, tol)
+                if len(pts) < 4:
+                    continue
+                # Drop slivers that only add bytes at this size.
+                area = abs(sum(pts[i][0]*pts[i-1][1] - pts[i-1][0]*pts[i][1]
+                               for i in range(len(pts)))) / 2
+                if area < min_area:
+                    continue
+                d.append("M" + "L".join(f"{round(x)},{round(y)}" for x, y in pts) + "Z")
     return "".join(d)
 
 
@@ -178,10 +217,21 @@ def main():
     # Natural Earth's formal names overflow the ranked list.
     SHORT = {"840": "United States", "784": "UAE"}
 
-    countries = {}
+    # Positions written down to nothing are still listed by Vanguard because they
+    # cannot be sold. Shading them implies exposure that does not exist.
+    DEAD_VALUE = 1000.0        # US dollars, across the whole fund
+    countries, written_off = {}, []
     for region, grp in df.groupby("Region"):
         cid = A2N.get(str(region).strip())
         if not cid:
+            continue
+        if float(grp["mv"].sum()) < DEAD_VALUE:
+            written_off.append({
+                "code": str(region).strip(),
+                "name": SHORT.get(cid, names.get(cid, region)),
+                "holdings": int(len(grp)),
+                "value": round(float(grp["mv"].sum()), 2),
+            })
             continue
         top = grp.nlargest(3, "wt")[["Holding name", "wt"]].values.tolist()
         sec = grp.groupby("Sector")["wt"].sum().sort_values(ascending=False)
@@ -212,6 +262,7 @@ def main():
     vb_h = min(H, max_y + pad) - vb_y
 
     payload = {
+        "writtenOff": written_off,
         "concentration": {
             "top1": round(ws[0], 2),
             "top3": round(sum(ws[:3]), 2),
@@ -240,6 +291,8 @@ def main():
     c = payload["concentration"]
     print(f"top 1 / 3 / 10          : {c['top1']}% / {c['top3']}% / {c['top10']}%")
     print(f"effective countries     : {c['effectiveCountries']} (of {c['countries']})")
+    for w in written_off:
+        print(f"excluded as written off : {w['name']} — {w['holdings']} holdings, US${w['value']}")
 
     tpl = os.path.join(os.path.dirname(OUT), "template.html")
     if os.path.exists(tpl):

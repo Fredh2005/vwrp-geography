@@ -46,7 +46,12 @@ It needs `pandas` and `openpyxl`, and the world topology at `/tmp/world50m.json`
 curl -Lo /tmp/world50m.json https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json
 ```
 
-Two details worth knowing if you change it. Simplifying a **closed ring** with plain
+Three details worth knowing if you change it. Russia and Fiji cross the **180th
+meridian**, so their rings jump from +179 to -179 longitude; projected naively that
+draws a straight line back across the entire map, which is exactly what it did the
+first time. `split_antimeridian()` cuts each ring at the crossing and closes both
+halves along the meridian. Russia legitimately appears on both edges of the map as
+a result, the same as on any world map centred on Greenwich. Simplifying a **closed ring** with plain
 RDP collapses it to two points — first and last are the same, so the baseline has
 zero length and every perpendicular distance computes as zero; `simplify()` splits
 each ring at its farthest point instead. And city-states project to **under a pixel**
