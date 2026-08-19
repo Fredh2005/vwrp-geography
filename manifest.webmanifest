@@ -1,0 +1,23 @@
+{
+ "name": "Where VWRP Invests",
+ "short_name": "VWRP Map",
+ "id": "/vwrp-geography/",
+ "start_url": "/vwrp-geography/",
+ "scope": "/vwrp-geography/",
+ "display": "standalone",
+ "background_color": "#0D1524",
+ "theme_color": "#D2A85E",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ]
+}

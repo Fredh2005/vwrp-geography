@@ -87,7 +87,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html mapdata.json
+          git add index.html mapdata.json manifest.webmanifest \
+                  apple-touch-icon.png icon-192.png icon-512.png
           if git diff --staged --quiet; then
             echo "Nothing changed since last night."
           else
