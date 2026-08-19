@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Where VWRP Actually Invests</title>
+<meta name="description" content="The geographic reality of a fund called All-World: 61% of it is one country.">
+<style>
+:root{
+  --bg:#FAF9F6; --panel:#FFFFFF; --panel2:#F4F2EC;
+  --ink:#181B22; --muted:#6B6F7B; --line:#E4E0D7; --line-strong:#CFC9BB;
+  --accent:#8A6A2F; --on-accent:#FFFFFF;
+  --sea:#EFEDE6; --nodata:#E4E0D7; --stroke:#FFFFFF;
+  --b1:#F3EAD6; --b2:#E4CFA0; --b3:#D0AE68; --b4:#B08C3E; --b5:#8A6A2F; --b6:#5C4519;
+  --font-display:ui-serif,Georgia,"Iowan Old Style","Times New Roman",serif;
+  --font-ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-num:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#0D1524; --panel:#132033; --panel2:#1A2A41;
+  --ink:#E4EBF5; --muted:#8B9BB4; --line:#22334C; --line-strong:#31465F;
+  --accent:#D2A85E; --on-accent:#0D1524;
+  --sea:#0F1A2C; --nodata:#1E3049; --stroke:#0D1524;
+  --b1:#2A2416; --b2:#4A3C1E; --b3:#6E5729; --b4:#96773A; --b5:#C09C50; --b6:#E3C67E;
+}}
+:root[data-theme=dark]{
+  --bg:#0D1524; --panel:#132033; --panel2:#1A2A41;
+  --ink:#E4EBF5; --muted:#8B9BB4; --line:#22334C; --line-strong:#31465F;
+  --accent:#D2A85E; --on-accent:#0D1524;
+  --sea:#0F1A2C; --nodata:#1E3049; --stroke:#0D1524;
+  --b1:#2A2416; --b2:#4A3C1E; --b3:#6E5729; --b4:#96773A; --b5:#C09C50; --b6:#E3C67E;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui);
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:34px 20px 64px;position:relative}
+.themebtn{position:absolute;top:32px;right:20px;background:var(--panel);color:var(--muted);
+  border:1px solid var(--line-strong);border-radius:2px;padding:6px 12px;font-size:11px;
+  letter-spacing:.06em;text-transform:uppercase;cursor:pointer;font-weight:600;font-family:inherit}
+.themebtn:hover{color:var(--accent);border-color:var(--accent)}
+.eyebrow{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);
+  font-weight:600;margin-bottom:10px}
+h1{font-family:var(--font-display);font-size:clamp(28px,5vw,42px);font-weight:600;margin:0;
+  letter-spacing:-.015em;text-wrap:balance;max-width:16ch}
+.standfirst{color:var(--muted);font-size:15px;margin-top:12px;max-width:60ch;line-height:1.6}
+.sub{color:var(--muted);font-size:12.5px;margin-top:14px;padding-bottom:22px;
+  border-bottom:1px solid var(--line-strong)}
+h2{font-family:var(--font-display);font-size:21px;font-weight:600;margin:44px 0 6px;
+  letter-spacing:-.01em}
+h2+.note{margin-top:0}
+.note{color:var(--muted);font-size:13.5px;max-width:66ch;margin:0 0 18px;line-height:1.65}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  margin:24px 0;background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.card{background:var(--panel);padding:15px 16px}
+.card .k{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.card .v{font-family:var(--font-display);font-size:27px;font-weight:600;margin-top:5px;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.card .s{font-size:11.5px;color:var(--muted);margin-top:3px}
+.mapbox{background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  padding:10px;position:relative}
+svg.map{display:block;width:100%;height:auto}
+svg.map path{stroke:var(--stroke);stroke-width:.4;vector-effect:non-scaling-stroke}
+svg.map path.hit{cursor:pointer}
+svg.map path.hit:hover,svg.map path.sel{stroke:var(--ink);stroke-width:1.2}
+svg.map circle.hit{cursor:pointer}
+svg.map circle.hit:hover{stroke-width:2}
+svg.map .hit:focus-visible{outline:none;stroke:var(--accent);stroke-width:2}
+.legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;
+  font-size:11px;color:var(--muted)}
+.legend .sw{width:26px;height:10px;display:inline-block}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line-strong);
+  border-radius:3px;padding:10px 12px;font-size:12.5px;min-width:180px;max-width:250px;
+  box-shadow:0 4px 18px rgba(0,0,0,.14);opacity:0;transition:opacity .12s;z-index:5}
+.tip.on{opacity:1}
+.tip .t{font-weight:600;margin-bottom:5px}
+.tip .r{display:flex;justify-content:space-between;gap:12px;color:var(--muted)}
+.tip .r b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.tip .co{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);
+  font-size:11.5px;color:var(--muted)}
+.bars{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:6px 0}
+.bar{display:grid;grid-template-columns:132px 1fr 74px;align-items:center;gap:12px;
+  padding:5px 16px;font-size:12.5px}
+.bar:hover{background:var(--panel2)}
+.bar .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .tr{background:var(--panel2);height:11px;position:relative;overflow:hidden}
+.bar .fl{position:absolute;inset:0 auto 0 0;background:var(--accent)}
+.bar .pc{text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums;
+  font-size:12px}
+.bar .ct{font-size:11px;color:var(--muted)}
+details.more{margin-top:10px}
+details.more summary{cursor:pointer;font-size:12.5px;color:var(--muted);padding:6px 0}
+details.more summary:hover{color:var(--accent)}
+.foot{margin-top:44px;color:var(--muted);font-size:12px;line-height:1.7;
+  background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--accent);
+  border-radius:3px;padding:15px 17px;max-width:88ch}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media(max-width:640px){
+  .bar{grid-template-columns:minmax(84px,1fr) 1.2fr 58px;gap:8px;padding:5px 10px}
+  .bar .ct{display:none}   /* the count crowds the name out at this width */
+  .wrap{padding-top:64px}
+  .themebtn{top:16px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <button id="theme" class="themebtn" type="button" aria-label="Switch theme"></button>
+  <div class="eyebrow">Vanguard FTSE All-World &middot; VWRP</div>
+  <h1>Where VWRP actually invests</h1>
+  <p class="standfirst">It holds <span id="nHold">—</span> companies across <span id="nCty">—</span>
+    countries, which sounds like the whole world. The map tells a narrower story.</p>
+  <div class="sub" id="sub"></div>
+
+  <div class="cards" id="cards"></div>
+
+  <h2>Every country it holds</h2>
+  <p class="note">Shaded by share of the fund. Bands are uneven on purpose — on a linear
+    scale the United States would be the only country you could see.</p>
+  <div class="mapbox">
+    <svg class="map" id="map" role="img" aria-labelledby="mapTitle">
+      <title id="mapTitle">World map shaded by each country's share of VWRP</title>
+    </svg>
+    <div class="tip" id="tip" role="status" aria-live="polite"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <h2>Ranked by weight</h2>
+  <p class="note">The same data as a list, because a map flatters small countries with
+    large areas and hides large holdings in small ones — Hong Kong and Taiwan being the
+    obvious cases here.</p>
+  <div class="bars" id="bars"></div>
+  <details class="more"><summary>Show all countries</summary><div class="bars" id="barsAll"></div></details>
+
+  <h2>How concentrated is it?</h2>
+  <p class="note" id="concNote"></p>
+  <div class="cards" id="conc"></div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const DATA = __MAPDATA__;
+(function(){
+  var el=function(id){return document.getElementById(id);};
+
+  var store={get:function(k){try{return localStorage.getItem(k);}catch(e){return null;}},
+             set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}}};
+  (function(){
+    var btn=el("theme"),root=document.documentElement,L={auto:"Auto",light:"Light",dark:"Dark"};
+    var m=store.get("vwrp-geo-theme")||"auto"; if(!L[m])m="auto";
+    function ap(){ m==="auto"?root.removeAttribute("data-theme"):root.setAttribute("data-theme",m);
+      btn.textContent=L[m]; store.set("vwrp-geo-theme",m); }
+    btn.onclick=function(){ m=m==="auto"?"dark":m==="dark"?"light":"auto"; ap(); };
+    ap();
+  })();
+
+  var C=DATA.countries, K=DATA.concentration;
+  var byId={}; Object.keys(C).forEach(function(id){ byId[id]=C[id]; });
+
+  // Uneven bands: weights span 0.001% to 61%, so linear shading shows one country.
+  var BANDS=[[10,"b6"],[3,"b5"],[1,"b4"],[0.5,"b3"],[0.1,"b2"],[0,"b1"]];
+  function band(w){ for(var i=0;i<BANDS.length;i++) if(w>=BANDS[i][0]) return BANDS[i][1];
+    return "b1"; }
+  var pct=function(v,d){ return (v==null?"—":v.toFixed(d===undefined?2:d)+"%"); };
+
+  el("nHold").textContent=DATA.totalHoldings.toLocaleString();
+  el("nCty").textContent=K.countries;
+  el("sub").textContent="Vanguard's published holdings, as at "+DATA.asOf+
+    " · "+DATA.mappedWeight+"% of the fund by weight";
+
+  var us=byId["840"]||{weight:0};
+  el("cards").innerHTML=[
+    ["United States",pct(us.weight,1),"of a global fund"],
+    ["Top 3 countries",pct(K.top3,1),"US, Japan, UK"],
+    ["Countries held",K.countries,"across "+DATA.totalHoldings.toLocaleString()+" companies"],
+    ["Effective countries",K.effectiveCountries,"weight-adjusted"]
+  ].map(function(c){ return '<div class="card"><div class="k">'+c[0]+'</div><div class="v">'+
+      c[1]+'</div><div class="s">'+c[2]+'</div></div>'; }).join("");
+
+  // ---- map ----
+  var svg=el("map"), NS="http://www.w3.org/2000/svg";
+  svg.setAttribute("viewBox",DATA.viewBox);
+  var vb=DATA.viewBox.split(" ");
+  var sea=document.createElementNS(NS,"rect");
+  sea.setAttribute("width",vb[2]); sea.setAttribute("height",vb[3]);
+  sea.setAttribute("fill","var(--sea)"); svg.appendChild(sea);
+
+  Object.keys(DATA.paths).forEach(function(id){
+    var p=document.createElementNS(NS,"path");
+    p.setAttribute("d",DATA.paths[id]);
+    var c=byId[id];
+    p.setAttribute("fill", c ? "var(--"+band(c.weight)+")" : "var(--nodata)");
+    if(c){ p.setAttribute("class","hit"); p.dataset.id=id;
+           p.setAttribute("tabindex","0");
+           p.setAttribute("aria-label",c.name+", "+pct(c.weight)+" of the fund"); }
+    svg.appendChild(p);
+  });
+
+  // City-states project to a pixel or less at this width. Hong Kong alone is
+  // 2.5% of the fund, so leaving it invisible would misrepresent the map.
+  var markers=[];
+  Object.keys(byId).forEach(function(id){
+    var p=svg.querySelector('path[data-id="'+id+'"]');
+    if(!p) return;
+    var b=p.getBBox();
+    if(Math.max(b.width,b.height)>=6) return;
+    var g=document.createElementNS(NS,"circle");
+    g.setAttribute("cx",(b.x+b.width/2).toFixed(1));
+    g.setAttribute("cy",(b.y+b.height/2).toFixed(1));
+    g.setAttribute("r","4.2");
+    g.setAttribute("fill","var(--"+band(byId[id].weight)+")");
+    g.setAttribute("stroke","var(--ink)");
+    g.setAttribute("stroke-width","1");
+    g.setAttribute("class","hit");
+    g.setAttribute("tabindex","0");
+    g.dataset.id=id;
+    g.setAttribute("aria-label",byId[id].name+", "+pct(byId[id].weight)+" of the fund");
+    markers.push(g);
+  });
+  markers.forEach(function(m){ svg.appendChild(m); });
+
+  var tip=el("tip");
+  function showTip(id,x,y){
+    var c=byId[id]; if(!c) return;
+    tip.innerHTML='<div class="t">'+c.name+'</div>'+
+      '<div class="r"><span>Share of fund</span><b>'+pct(c.weight)+'</b></div>'+
+      '<div class="r"><span>Holdings</span><b>'+c.holdings+'</b></div>'+
+      (c.topSector?'<div class="r"><span>Mostly</span><b>'+c.topSector+'</b></div>':'')+
+      (c.top&&c.top.length?'<div class="co">'+c.top.map(function(t){
+          return t[0]+' · '+t[1].toFixed(2)+'%'; }).join('<br>')+'</div>':'');
+    tip.classList.add("on");
+    var box=el("map").parentNode.getBoundingClientRect();
+    var tw=tip.offsetWidth, th=tip.offsetHeight;
+    var left=Math.min(Math.max(x-box.left+14,6), box.width-tw-6);
+    var top=Math.min(Math.max(y-box.top-th-10,6), box.height-th-6);
+    tip.style.left=left+"px"; tip.style.top=top+"px";
+  }
+  function hideTip(){ tip.classList.remove("on"); }
+
+  svg.addEventListener("pointermove",function(ev){
+    var t=ev.target;
+    if(t.dataset&&t.dataset.id) showTip(t.dataset.id,ev.clientX,ev.clientY); else hideTip();
+  });
+  svg.addEventListener("pointerleave",hideTip);
+  svg.addEventListener("focusin",function(ev){
+    var t=ev.target; if(!t.dataset||!t.dataset.id) return;
+    var r=t.getBoundingClientRect(); showTip(t.dataset.id,r.left+r.width/2,r.top+r.height/2);
+  });
+  svg.addEventListener("focusout",hideTip);
+
+  el("legend").innerHTML='<span>Share of fund</span>'+
+    [["b1","under 0.1%"],["b2","0.1–0.5%"],["b3","0.5–1%"],["b4","1–3%"],
+     ["b5","3–10%"],["b6","over 10%"]].map(function(b){
+      return '<span><span class="sw" style="background:var(--'+b[0]+')"></span> '+b[1]+'</span>';
+    }).join("")+'<span><span class="sw" style="background:var(--nodata)"></span> not held</span>';
+
+  // ---- ranked bars ----
+  var list=Object.keys(C).map(function(id){ return C[id]; })
+            .sort(function(a,b){ return b.weight-a.weight; });
+  var max=list[0].weight;
+  function bars(arr){
+    return arr.map(function(c){
+      return '<div class="bar"><div class="nm">'+c.name+
+        ' <span class="ct">'+c.holdings+'</span></div>'+
+        '<div class="tr"><div class="fl" style="width:'+(c.weight/max*100).toFixed(2)+'%"></div></div>'+
+        '<div class="pc">'+pct(c.weight)+'</div></div>';
+    }).join("");
+  }
+  el("bars").innerHTML=bars(list.slice(0,12));
+  el("barsAll").innerHTML=bars(list.slice(12));
+
+  // ---- concentration ----
+  var cn=byId["156"], hk=byId["344"];
+  el("concNote").innerHTML="A fund spread across "+K.countries+" countries can still behave "+
+    "like a much smaller one. <b>Effective countries</b> is the weight-adjusted count: it "+
+    "answers how many equally-sized countries would give the same concentration. VWRP holds "+
+    K.countries+", and behaves like <b>"+K.effectiveCountries+"</b>.";
+  el("conc").innerHTML=[
+    ["Largest country",pct(K.top1,1),"a single market"],
+    ["Top 5",pct(K.top5,1),"of the whole fund"],
+    ["Top 10",pct(K.top10,1),"of the whole fund"],
+    ["Remaining "+(K.countries-10),pct(100-K.top10,1),"combined"]
+  ].map(function(c){ return '<div class="card"><div class="k">'+c[0]+'</div><div class="v">'+
+      c[1]+'</div><div class="s">'+c[2]+'</div></div>'; }).join("");
+
+  el("foot").innerHTML=
+    "<b>Country means where a company is listed, not where it earns.</b> Shell is British-listed "+
+    "but sells oil worldwide; TSMC is Taiwanese-listed and sells to everyone. So the "+pct(K.top1,0)+
+    " US figure describes where shares are traded, not where the economic exposure sits — the "+
+    "true geographic spread is wider than this map, and no fund holdings file can show you that. "+
+    (cn&&hk?"<br><br>Note also how differently markets are counted: China contributes "+
+      cn.holdings+" companies for "+pct(cn.weight)+" of the fund, while Hong Kong's "+hk.holdings+
+      " carry "+pct(hk.weight)+". Company count says very little about where your money is. ":"")+
+    "<br><br>Weights are Vanguard's own published figures as at "+DATA.asOf+", covering "+
+    DATA.mappedWeight+"% of the fund; the small remainder is holdings with no matching country "+
+    "shape. Not investment advice.";
+})();
+</script>
+</body>
+</html>
