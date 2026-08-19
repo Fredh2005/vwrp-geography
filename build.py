@@ -55,14 +55,25 @@ def load_feed():
         by_region.setdefault(h.get("region"), []).append(h)
 
     total_mc = sum(h["marketCapUsd"] for h in holdings if h.get("marketCapUsd")) or 1
+    # The feed only prices the largest holdings, so its country shares are not
+    # comparable with whole-fund weights -- the sample is skewed to big markets.
+    # Baseline each country against Vanguard's weights over the SAME holdings,
+    # so live vs baseline is a like-for-like comparison and the difference is
+    # genuine drift rather than an artefact of the denominator.
+    total_vw = sum(h["vanguardWeight"] for h in holdings if h.get("vanguardWeight")) or 1
     MIN_N = 3          # a median over one or two companies is noise, not a signal
     out = {}
     for region, hs in by_region.items():
         mc = sum(h["marketCapUsd"] for h in hs if h.get("marketCapUsd"))
+        vw = sum(h["vanguardWeight"] for h in hs if h.get("vanguardWeight"))
         pes = [h["peTrailing"] for h in hs
                if h.get("peTrailing") and h["peTrailing"] > 0]
+        live_w = mc / total_mc * 100
+        base_w = vw / total_vw * 100
         rec = {
-            "liveWeight": round(mc / total_mc * 100, 4),
+            "liveWeight": round(live_w, 4),
+            "baseWeight": round(base_w, 4),
+            "drift": round(live_w - base_w, 4),
             "sampled": len(hs),
             "enough": len(hs) >= MIN_N,
         }

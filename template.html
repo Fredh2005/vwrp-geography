@@ -189,14 +189,18 @@ const DATA = __MAPDATA__;
       bands:[[10,"b6"],[3,"b5"],[1,"b4"],[0.5,"b3"],[0.1,"b2"],[0,"b1"]],
       legend:[["b1","under 0.1%"],["b2","0.1–0.5%"],["b3","0.5–1%"],["b4","1–3%"],
               ["b5","3–10%"],["b6","over 10%"]] },
-    liveWeight:{ label:"Weight today", kind:"seq", fmt:pct, live:true,
-      note:"Share of market value across the holdings the screener priced last night. "+
-           "Compare it with the published weight to see which way the fund has drifted "+
-           "since the snapshot.",
-      get:function(c){ return c.live && c.live.liveWeight; },
-      bands:[[10,"b6"],[3,"b5"],[1,"b4"],[0.5,"b3"],[0.1,"b2"],[0,"b1"]],
-      legend:[["b1","under 0.1%"],["b2","0.1–0.5%"],["b3","0.5–1%"],["b4","1–3%"],
-              ["b5","3–10%"],["b6","over 10%"]] },
+    drift:{ label:"Drift since snapshot", kind:"div", fmt:function(v){
+        return v==null ? "—" : (v>0?"+":"")+v.toFixed(2)+" pts"; },
+      live:true,
+      note:"How each country's share has moved since Vanguard's snapshot, in "+
+           "percentage points. Measured within the holdings priced last night and "+
+           "compared with Vanguard's own weights over those same holdings, so this is "+
+           "real movement rather than an artefact of a smaller sample. Blue has gained, "+
+           "red has lost.",
+      get:function(c){ return c.live && c.live.drift; },
+      bands:[[1.5,"d6"],[0.5,"d5"],[0.1,"d4"],[-0.1,"dm"],[-0.5,"d3"],[-1.5,"d2"],[-999,"d1"]],
+      legend:[["d1","under −1.5"],["d2","−1.5 to −0.5"],["d3","−0.5 to −0.1"],["dm","flat"],
+              ["d4","+0.1 to +0.5"],["d5","+0.5 to +1.5"],["d6","over +1.5"]] },
     medianPE:{ label:"Valuation", kind:"seq", fmt:num, live:true, needsEnough:true,
       note:"Median trailing price/earnings of the companies priced in each market. "+
            "Darker is more expensive. Multiples are only loosely comparable across "+
@@ -332,10 +336,11 @@ const DATA = __MAPDATA__;
   function showTip(id,x,y){
     var c=byId[id]; if(!c) return;
     var lv=c.live||{};
-    var rows='<div class="r"><span>Published weight</span><b>'+pct(c.weight)+'</b></div>';
-    if(lv.liveWeight!=null)
-      rows+='<div class="r"><span>Weight today</span><b>'+pct(lv.liveWeight)+'</b></div>';
+    var rows='<div class="r"><span>Fund weight</span><b>'+pct(c.weight)+'</b></div>';
     rows+='<div class="r"><span>Holdings</span><b>'+c.holdings+'</b></div>';
+    if(lv.drift!=null)
+      rows+='<div class="r"><span>Drift since snapshot</span><b>'+
+        (lv.drift>0?"+":"")+lv.drift.toFixed(2)+' pts</b></div>';
     if(c.topSector) rows+='<div class="r"><span>Mostly</span><b>'+c.topSector+'</b></div>';
     if(lv.enough){
       rows+='<div class="co">'+
