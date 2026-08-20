@@ -33,13 +33,21 @@ jobs:
     steps:
       - id: check
         # Two crons cover the UK clock change; only the 23:20 local one runs.
+        # Decided from which cron fired, never from the wall clock - GitHub
+        # starts scheduled runs an hour or more late, and an hour-window check
+        # then silently skips the real firing while still reporting success.
         run: |
-          UK_HOUR=$(TZ=Europe/London date +%H)
           echo "UK local time: $(TZ=Europe/London date '+%Y-%m-%d %H:%M %Z')"
-          if [ "${{ github.event_name }}" != "schedule" ] || [ "$UK_HOUR" = "23" ]; then
+          echo "Fired by cron: '${{ github.event.schedule }}'"
+          if [ "$(TZ=Europe/London date +%z)" = "+0100" ]; then
+            WANTED="20 22 * * *"   # BST: 22:20 UTC is 23:20 UK
+          else
+            WANTED="20 23 * * *"   # GMT: 23:20 UTC is 23:20 UK
+          fi
+          if [ "${{ github.event_name }}" != "schedule" ] || [ "${{ github.event.schedule }}" = "$WANTED" ]; then
             echo "proceed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Off-season firing (UK hour $UK_HOUR) - skipping."
+            echo "Off-season cron ('${{ github.event.schedule }}') - skipping."
             echo "proceed=false" >> "$GITHUB_OUTPUT"
           fi
 
