@@ -1,16 +1,27 @@
 name: Rebuild nightly from live data
 
-# The screener republishes data.json every night at 21:35 UK with live market
+# The screener republishes data.json every night from 21:35 UK with live market
 # caps and fundamentals for every holding it prices. This picks that up and
 # recomputes the live weight, valuation, growth and return layers.
 #
 # Vanguard's published weights come from the .xlsx in holdings/ and only change
 # when a new export is committed — those are the authoritative figures and are
 # deliberately not derived from live prices.
+#
+# GitHub's scheduler is best-effort: on 26-27 Aug 2026 it dropped roughly 44
+# hours of firings across every repo here, silently, and this page went two
+# days without a rebuild. So the schedule no longer depends on any single
+# firing - several crons fire through the night and each run rebuilds only if
+# this cycle has not already been done. The guard reads the wall clock to ask
+# "has tonight's cycle published yet?", which a delayed run answers correctly,
+# rather than the old "which cron slot am I in?", which it answers wrongly.
 on:
   schedule:
-    - cron: "20 22 * * *"    # 23:20 UK in summer, 22:20 in winter
-    - cron: "20 23 * * *"    # the other side of the clock change
+    - cron: "20 22 * * *"    # 23:20 UK in BST - the on-time slot
+    - cron: "30 23 * * *"    # 23:30 UK in GMT - the on-time slot
+    - cron: "40 0 * * *"     # catch-up
+    - cron: "50 2 * * *"     # catch-up
+    - cron: "0 5 * * *"      # catch-up
   push:
     paths:
       - "holdings/**"
@@ -32,24 +43,71 @@ jobs:
       proceed: ${{ steps.check.outputs.proceed }}
     steps:
       - id: check
-        # Two crons cover the UK clock change; only the 23:20 local one runs.
-        # Decided from which cron fired, never from the wall clock - GitHub
-        # starts scheduled runs an hour or more late, and an hour-window check
-        # then silently skips the real firing while still reporting success.
+        env:
+          SITE: https://fredh2005.github.io/vwrp-geography/
+          FEED: https://fredh2005.github.io/vwrp-screener1/data.json
         run: |
-          echo "UK local time: $(TZ=Europe/London date '+%Y-%m-%d %H:%M %Z')"
-          echo "Fired by cron: '${{ github.event.schedule }}'"
-          if [ "$(TZ=Europe/London date +%z)" = "+0100" ]; then
-            WANTED="20 22 * * *"   # BST: 22:20 UTC is 23:20 UK
-          else
-            WANTED="20 23 * * *"   # GMT: 23:20 UTC is 23:20 UK
-          fi
-          if [ "${{ github.event_name }}" != "schedule" ] || [ "${{ github.event.schedule }}" = "$WANTED" ]; then
+          set -uo pipefail
+
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "Manual or push-triggered run - proceeding."
             echo "proceed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Off-season cron ('${{ github.event.schedule }}') - skipping."
-            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          NOW=$(date +%s)
+          UK_H=$(TZ=Europe/London date +%-H)
+
+          # The cycle starts at 23:20 UK and runs past midnight, so before
+          # 10:00 UK we are still working on last night's cycle.
+          if [ "$UK_H" -lt 10 ]; then
+            CYCLE=$(TZ=Europe/London date -d 'yesterday' +%F)
+          else
+            CYCLE=$(TZ=Europe/London date +%F)
+          fi
+          echo "UK now: $(TZ=Europe/London date '+%F %H:%M %Z')  cycle=$CYCLE"
+
+          # Never rebuild early: in GMT the first slot lands at 22:20 UK.
+          TARGET=$(TZ=Europe/London date -d "$CYCLE 23:20" +%s)
+          if [ "$NOW" -lt "$TARGET" ]; then
+            echo "Before 23:20 UK - too early. A later slot will pick this up."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          WINDOW=$(TZ=Europe/London date -d "$CYCLE 23:00" +%s)
+          # The screener's own cycle opens at 21:00 UK on the same date.
+          FEED_WINDOW=$(TZ=Europe/London date -d "$CYCLE 21:00" +%s)
+
+          head_epoch() {
+            local lm
+            lm=$(curl -sSI --max-time 30 "$1" | tr -d '\r' \
+                 | awk -F': ' 'tolower($1)=="last-modified"{print $2}') || lm=""
+            if [ -z "$lm" ]; then echo ""; else date -d "$lm" +%s 2>/dev/null || echo ""; fi
+          }
+
+          PUB=$(head_epoch "$SITE")
+          if [ -n "$PUB" ] && [ "$PUB" -ge "$WINDOW" ]; then
+            echo "Already rebuilt for the $CYCLE cycle - nothing to do."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Rebuilding from a stale feed would publish yesterday's numbers as
+          # tonight's. If the screener has not refreshed yet, wait for a later
+          # catch-up slot instead - which is also how a delayed screener run
+          # still gets picked up the same night.
+          FEED_PUB=$(head_epoch "$FEED")
+          if [ -z "$FEED_PUB" ]; then
+            echo "Could not read the feed's Last-Modified - proceeding anyway."
+          elif [ "$FEED_PUB" -lt "$FEED_WINDOW" ]; then
+            echo "Screener feed has not refreshed for the $CYCLE cycle yet - waiting."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Feed is current and tonight's rebuild has not run - proceeding."
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
 
   rebuild:
     needs: guard
