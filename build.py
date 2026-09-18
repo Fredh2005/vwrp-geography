@@ -290,6 +290,11 @@ def main():
             paths[cid] = p
             names[cid] = (g.get("properties") or {}).get("name", cid)
 
+    # Vanguard writes "As at 31 Aug 2026" in the preamble above the table.
+    head = pd.read_excel(SRC, header=None, nrows=6)
+    as_of = next((str(v).replace("As at", "").strip() for v in head.values.ravel()
+                  if str(v).lower().startswith("as at")), "unknown date")
+
     df = pd.read_excel(SRC, header=6).dropna(subset=["Ticker"])
     df["wt"] = df["% of market value"].astype(str).str.rstrip("%").astype(float)
     df["mv"] = (df["Market value"].astype(str)
@@ -373,7 +378,7 @@ def main():
         "paths": paths,
         "names": names,
         "countries": countries,
-        "asOf": "31 July 2026",
+        "asOf": as_of,
         "totalHoldings": int(len(df)),
         "mappedWeight": round(float(sum(c["weight"] for c in countries.values())), 2),
     }
